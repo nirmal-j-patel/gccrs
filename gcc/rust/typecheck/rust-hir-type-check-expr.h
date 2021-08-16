@@ -631,7 +631,7 @@ public:
       return;
 
     // we expect this to be
-    infered = new TyTy::BoolType (expr.get_mappings ().get_hirid ());
+    context->lookup_builtin ("bool", &infered);
     infered->append_reference (lhs->get_ref ());
     infered->append_reference (rhs->get_ref ());
   }
