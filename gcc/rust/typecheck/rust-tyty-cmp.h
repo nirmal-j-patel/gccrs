@@ -371,8 +371,18 @@ public:
 
   virtual void visit (const ParamType &type) override
   {
-    // it is ok for types to can eq to a ParamType
-    ok = true;
+    ok = false;
+    if (emit_error_flag)
+      {
+	Location ref_locus = mappings->lookup_location (type.get_ref ());
+	Location base_locus
+	  = mappings->lookup_location (get_base ()->get_ref ());
+	RichLocation r (ref_locus);
+	r.add_range (base_locus);
+	rust_error_at (r, "expected [%s] got [%s]",
+		       get_base ()->as_string ().c_str (),
+		       type.as_string ().c_str ());
+      }
   }
 
   virtual void visit (const DynamicObjectType &type) override
@@ -641,18 +651,7 @@ public:
     BaseCmp::visit (type);
   }
 
-  void visit (const ParamType &type) override
-  {
-    bool is_valid
-      = (base->get_infer_kind () == TyTy::InferType::InferTypeKind::GENERAL);
-    if (is_valid)
-      {
-	ok = true;
-	return;
-      }
-
-    BaseCmp::visit (type);
-  }
+  void visit (const ParamType &) override { ok = true; }
 
   void visit (const DynamicObjectType &type) override
   {
@@ -865,6 +864,8 @@ public:
     ok = true;
   }
 
+  void visit (const ParamType &type) override { ok = true; }
+
 private:
   const BaseType *get_base () const override { return base; }
   const ArrayType *base;
@@ -885,6 +886,8 @@ public:
   {
     ok = type.get_infer_kind () == InferType::InferTypeKind::GENERAL;
   }
+
+  void visit (const ParamType &type) override { ok = true; }
 
 private:
   const BaseType *get_base () const override { return base; }
@@ -910,6 +913,8 @@ public:
     ok = type.get_int_kind () == base->get_int_kind ();
   }
 
+  void visit (const ParamType &type) override { ok = true; }
+
 private:
   const BaseType *get_base () const override { return base; }
   const IntType *base;
@@ -934,6 +939,8 @@ public:
     ok = type.get_uint_kind () == base->get_uint_kind ();
   }
 
+  void visit (const ParamType &type) override { ok = true; }
+
 private:
   const BaseType *get_base () const override { return base; }
   const UintType *base;
@@ -957,6 +964,8 @@ public:
   {
     ok = type.get_float_kind () == base->get_float_kind ();
   }
+
+  void visit (const ParamType &type) override { ok = true; }
 
 private:
   const BaseType *get_base () const override { return base; }
@@ -996,6 +1005,10 @@ public:
 
 	if (!this_field_ty->can_eq (other_field_ty, emit_error_flag))
 	  {
+	    rust_debug ("SHI@TY");
+	    this_field_ty->debug ();
+	    other_field_ty->debug ();
+
 	    BaseCmp::visit (type);
 	    return;
 	  }
@@ -1003,6 +1016,8 @@ public:
 
     ok = true;
   }
+
+  void visit (const ParamType &type) override { ok = true; }
 
 private:
   const BaseType *get_base () const override { return base; }
@@ -1041,6 +1056,8 @@ public:
     ok = true;
   }
 
+  void visit (const ParamType &type) override { ok = true; }
+
 private:
   const BaseType *get_base () const override { return base; }
   const TupleType *base;
@@ -1061,6 +1078,8 @@ public:
   }
 
   void visit (const USizeType &type) override { ok = true; }
+
+  void visit (const ParamType &type) override { ok = true; }
 
 private:
   const BaseType *get_base () const override { return base; }
@@ -1083,6 +1102,8 @@ public:
 
   void visit (const ISizeType &type) override { ok = true; }
 
+  void visit (const ParamType &type) override { ok = true; }
+
 private:
   const BaseType *get_base () const override { return base; }
   const ISizeType *base;
@@ -1103,6 +1124,8 @@ public:
   }
 
   void visit (const CharType &type) override { ok = true; }
+
+  void visit (const ParamType &type) override { ok = true; }
 
 private:
   const BaseType *get_base () const override { return base; }
@@ -1183,12 +1206,6 @@ public:
     bool ok = context->lookup_type (base->get_ty_ref (), &lookup);
     rust_assert (ok);
 
-    if (lookup->get_kind () == TypeKind::PARAM)
-      {
-	InferType infer (UNKNOWN_HIRID, InferType::InferTypeKind::GENERAL);
-	return infer.can_eq (other, emit_error_flag);
-      }
-
     return lookup->can_eq (other, emit_error_flag);
   }
 
@@ -1198,7 +1215,42 @@ public:
   // impl <X>Foo<X> { ... }
   // both of these types are compatible so we mostly care about the number of
   // generic arguments
-  void visit (const ParamType &type) override { ok = true; }
+  void visit (const ParamType &) override { ok = true; }
+
+  void visit (const TupleType &) override { ok = true; }
+
+  void visit (const ADTType &) override { ok = true; }
+
+  void visit (const InferType &) override { ok = true; }
+
+  void visit (const FnType &) override { ok = true; }
+
+  void visit (const FnPtr &) override { ok = true; }
+
+  void visit (const ArrayType &) override { ok = true; }
+
+  void visit (const BoolType &) override { ok = true; }
+
+  void visit (const IntType &) override { ok = true; }
+
+  void visit (const UintType &) override { ok = true; }
+
+  void visit (const USizeType &) override { ok = true; }
+
+  void visit (const ISizeType &) override { ok = true; }
+
+  void visit (const FloatType &) override { ok = true; }
+
+  void visit (const CharType &) override { ok = true; }
+
+  void visit (const StrType &) override { ok = true; }
+
+  void visit (const NeverType &) override { ok = true; }
+
+  void visit (const PlaceholderType &type) override
+  {
+    ok = base->get_symbol ().compare (type.get_symbol ()) == 0;
+  }
 
 private:
   const BaseType *get_base () const override { return base; }
@@ -1217,6 +1269,8 @@ public:
 
   void visit (const StrType &type) override { ok = true; }
 
+  void visit (const ParamType &type) override { ok = true; }
+
 private:
   const BaseType *get_base () const override { return base; }
   const StrType *base;
@@ -1232,6 +1286,8 @@ public:
   {}
 
   void visit (const NeverType &type) override { ok = true; }
+
+  void visit (const ParamType &type) override { ok = true; }
 
 private:
   const BaseType *get_base () const override { return base; }
@@ -1323,6 +1379,8 @@ public:
     Location ref_locus = mappings->lookup_location (type.get_ref ());
     ok = base->bounds_compatible (type, ref_locus, false);
   }
+
+  void visit (const ParamType &type) override { ok = true; }
 
 private:
   const BaseType *get_base () const override { return base; }
